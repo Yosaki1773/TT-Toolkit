@@ -285,8 +285,8 @@ export function createDetailForm({ runtime, view, render, saveManually, schedule
 
     return function renderDetailForm(draft) {
         return h('div', { className: 'wie-form-body' },
-            basicSection(draft),
             contentSection(draft),
+            basicSection(draft),
             timingSection(draft),
             advancedSection(draft),
             footer(),
