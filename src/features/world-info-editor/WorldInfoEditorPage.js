@@ -31,7 +31,7 @@ export function mountWorldInfoEditorPage(target, props) {
     };
     // 触发词编辑器持有自己的输入框与列表容器，使增删词条时无需全量重绘、不中断输入法。
     const tagRefs = { primary: null, secondary: null };
-    // 然后是多个定时器争抢滚动位置。
+    // 焦点变化时只保留最新一次滚动避让，避免多个定时器争抢滚动位置。
     let cancelScroll = null;
     const scheduleScroll = (element, options) => {
         cancelScroll?.();
@@ -200,7 +200,7 @@ export function mountWorldInfoEditorPage(target, props) {
                 h('p', { text: '查看、检索并编辑世界书条目设定，支持主次关键词与双轨自动保存。' }),
             ),
             h('label', { className: 'master-toggle' }, toggle, h('span', { text: view.enabled ? '已启用' : '未启用' })),
-       ));
+        ))
 
         noticeSlot = h('div');
         syncNotice();
@@ -363,7 +363,7 @@ export function mountWorldInfoEditorPage(target, props) {
     async function saveManually() {
         try {
             const written = await runtime.saveCurrentDraft({ isAuto: false });
-            // 没有改动时也给���次明确反馈，避免保存按钮看起来没反应。
+            // 没有改动时也给一次明确反馈，避免保存按钮看起来没反应。
             if (!written) {
                 notices.show('没有需要保存的修改。', 'info');
                 syncNotice();
@@ -401,10 +401,9 @@ export function mountWorldInfoEditorPage(target, props) {
         if (disposed)
             return;
 
-        // 重绘前只记录真实存在且可见的列表滚动位置。
-        // 新列表替换旧列表时，旧容器被移除，不能把此时的新容器初始 scrollTop=0 再写回状态。
+        // 重绘前记住列表滚动位置：从详情返回长列表时不应回到顶部。
         const previousList = target.querySelector('.wie-card-list');
-        if (previousList && previousList.isConnected)
+        if (previousList)
             view.listScrollTop = previousList.scrollTop;
 
         target.replaceChildren();
@@ -432,10 +431,7 @@ export function mountWorldInfoEditorPage(target, props) {
         // fixed 定位的工作台里，滚动位置只能靠显式恢复。
         const restoreScroll = view.listScrollTop;
         if (restoreScroll > 0)
-            requestAnimationFrame(() => {
-                if (!disposed && cardList.isConnected)
-                    cardList.scrollTop = restoreScroll;
-            });
+            requestAnimationFrame(() => { cardList.scrollTop = restoreScroll; });
 
         // 右侧详情区
         const detailPane = h('main', { className: 'wie-detail-pane' });
