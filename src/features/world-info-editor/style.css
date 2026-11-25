@@ -156,7 +156,7 @@
 }
 .wie-search-box input {
   width: 100%;
-  padding: 7px 34px 7px 28px;
+  padding: 7px 34px 7px 10px;
   border: 1px solid var(--ttk-border);
   border-radius: 7px;
   background: var(--ttk-inset);
@@ -166,13 +166,6 @@
 }
 .wie-search-box input:focus {
   border-color: var(--ttk-accent);
-}
-.wie-search-icon {
-  position: absolute;
-  left: 8px;
-  color: var(--ttk-muted);
-  pointer-events: none;
-  font-size: 12px;
 }
 
 /* 一键清空搜索框：有内容时才出现，占用右侧空位。 */

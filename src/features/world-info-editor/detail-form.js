@@ -66,6 +66,7 @@ function paramItem(caption, control) {
 
 // 右侧详情表单：按条目字段分组拆成四个区块，每个区块只依赖自己的控件与 runtime。
 export function createDetailForm({ runtime, view, render, saveManually, scheduleScroll, renderTagEditor, run }) {
+    let contentTextarea = null;
     const bind = (field, options) => input => {
         bindNumberInput(runtime, input, field, options);
         return input;
@@ -153,6 +154,9 @@ export function createDetailForm({ runtime, view, render, saveManually, schedule
             placeholder: '在此输入条目世界观正文设定…',
             attrs: { 'aria-label': '条目正文内容' },
         });
+        // 只继承拖拽写入的内联高度，不固定宽度或写死 CSS 默认高度。
+        textarea.style.height = contentTextarea?.style.height ?? '';
+        contentTextarea = textarea;
         textarea.addEventListener('input', () => {
             runtime.updateDraftField('content', textarea.value);
             scheduleScroll(textarea, { delay: 60 });

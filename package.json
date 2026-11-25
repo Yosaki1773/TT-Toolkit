@@ -7,6 +7,7 @@
     "syntaxcheck": "node scripts/check-js.mjs",
     "linecheck": "node scripts/check-lines.mjs",
     "test": "vitest run --configLoader native",
+    "preview:world-info-editor": "node scripts/world-info-editor-preview.mjs",
     "check": "npm run syntaxcheck && npm run linecheck && npm run test"
   },
   "dependencies": {},

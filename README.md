@@ -73,6 +73,10 @@ https://github.com/xnshf/TT-Toolkit
 
 TT-Toolkit 目前处于 `0.x` 单用户开发验证阶段，功能和设置格式仍可能调整。
 
+## 开发验证
+
+运行 `npm run preview:world-info-editor`，在浏览器打开 <http://127.0.0.1:4173/>，可用 80 条内存示例测试世界书编辑器。该环境加载原版工作台与功能代码，不连接真实宿主，刷新页面即可重置。启动、停止和验收步骤见 [世界书编辑器隔离验证](./docs/world-info-editor-preview.md)。
+
 ## 致谢
 
 特别感谢 [Darkatse](https://github.com/Darkatse) 创建 TauriTavern，并为本插件提供运行基础与公开扩展接口。

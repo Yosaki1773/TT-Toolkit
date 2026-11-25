@@ -9,6 +9,7 @@ import { createDetailView } from './detail-view.js';
 import { createEntryCards } from './entry-cards.js';
 import { createTagEditor } from './tag-editor.js';
 import { createActionRunner } from '../../ui/run-action.js';
+import { renderSearchAndFilter } from './search-filter.js';
 
 const SOURCE_LABELS = {
     chat: '当前聊天',
@@ -24,6 +25,8 @@ export function mountWorldInfoEditorPage(target, props) {
         mobileSubView: 'list', // 'list' | 'edit'
         mobileTab: 'basic',
         zenMode: false,
+        zenSidebarOpen: false,
+        zenListScrollTop: 0,
         accordionOpen: false,
         listScrollTop: 0,
         formUid: null,
@@ -118,7 +121,8 @@ export function mountWorldInfoEditorPage(target, props) {
     });
     const unsubscribe = runtime.subscribe(() => {
         if (disposed) return;
-        if (isTyping()) {
+        const { selectedWorld, selectedUid } = runtime.state;
+        if ((isTyping() || view.zenMode) && selectedWorld === view.formWorld && selectedUid === view.formUid) {
             syncLiveStatus();
             return;
         }
@@ -127,14 +131,16 @@ export function mountWorldInfoEditorPage(target, props) {
 
     const renderTagEditor = createTagEditor({ runtime, tagRefs, scheduleScroll });
     const { renderCards } = createEntryCards({ runtime, view, target, runNavigating });
-    const { renderDetailHeader, renderZenOverlay, syncMobileSaveChip } = createDetailView({
+    const { renderDetailHeader, renderZenOverlay, syncMobileSaveChip, refreshZenSidebar, syncZenStatus } = createDetailView({
         runtime, view, target, render: () => render(), runNavigating, saveManually: () => saveManually(),
+        onListChange: () => refreshEntryLists(),
     });
     const renderDetailForm = createDetailForm({
         runtime, view, render: () => render(), saveManually: () => saveManually(), scheduleScroll, renderTagEditor, run,
     });
 
     function syncLiveStatus() {
+        syncZenStatus();
         const { saveStatus, lastSavedTime, currentDraft, error } = runtime.state;
         const status = target.querySelector('.wie-status-indicator');
         const manualLabel = `已保存 (${lastSavedTime ?? '刚刚'})${runtime.state.lastConversionCount > 0 ? ` · 已转换 ${runtime.state.lastConversionCount} 处 user` : ''}`;
@@ -281,57 +287,10 @@ export function mountWorldInfoEditorPage(target, props) {
         );
     }
 
-    function renderSearchAndFilter() {
-        const state = runtime.state;
-        const searchInput = h('input', {
-            type: 'text',
-            value: state.searchQuery,
-            placeholder: '搜索标题、关键词或正文…',
-            attrs: { 'aria-label': '搜索世界书条目' },
-        });
-        searchInput.addEventListener('input', () => {
-            runtime.setSearchQuery(searchInput.value);
-            const list = target.querySelector('.wie-card-list');
-            if (list) renderCards(list);
-            updateClear();
-        });
-
-        const clearBtn = h('button', {
-            type: 'button',
-            className: 'wie-search-clear',
-            text: '×',
-            attrs: { 'aria-label': '清空搜索', title: '清空搜索' },
-        });
-        clearBtn.addEventListener('click', () => {
-            searchInput.value = '';
-            runtime.setSearchQuery('');
-            const list = target.querySelector('.wie-card-list');
-            if (list) renderCards(list);
-            updateClear();
-            searchInput.focus();
-        });
-        const updateClear = () => clearBtn.toggleAttribute('hidden', !searchInput.value);
-        updateClear();
-
-        const chips = [
-            ['all', '全部'],
-            ['constant', '常驻'],
-            ['active', '已启用'],
-            ['disabled', '已禁用'],
-            ['depth', '@深度'],
-            ['image', '含图片'],
-        ].map(([key, label]) => actionButton(label, () => {
-            runtime.setFilter(key);
-        }, { className: `wie-chip${state.filter === key ? ' active' : ''}` }));
-
-        return h('div', { className: 'wie-list-header' },
-            h('div', { className: 'wie-search-box' },
-                h('span', { className: 'wie-search-icon', text: '🔍', attrs: { 'aria-hidden': 'true' } }),
-                searchInput,
-                clearBtn,
-            ),
-            h('div', { className: 'wie-filter-chips' }, chips),
-        );
+    function refreshEntryLists() {
+        const list = target.querySelector('.wie-card-list');
+        if (list) renderCards(list);
+        refreshZenSidebar();
     }
 
     // 手机输入法没有稳定的失焦时机：返回列表前先把未保存草稿落盘，避免静默丢失。
@@ -405,6 +364,9 @@ export function mountWorldInfoEditorPage(target, props) {
         const previousList = target.querySelector('.wie-card-list');
         if (previousList)
             view.listScrollTop = previousList.scrollTop;
+        const previousZenList = target.querySelector('.wie-zen-entry-list');
+        if (previousZenList)
+            view.zenListScrollTop = previousZenList.scrollTop;
 
         target.replaceChildren();
         const root = h('div', { className: `wie-root${view.mobileSubView === 'edit' ? ' wie-edit-view' : ''}` });
@@ -423,15 +385,11 @@ export function mountWorldInfoEditorPage(target, props) {
 
         // 左侧列表区
         const listPane = h('aside', { className: 'wie-list-pane' });
-        listPane.append(renderSearchAndFilter());
+        listPane.append(renderSearchAndFilter(runtime, refreshEntryLists));
 
         const cardList = h('div', { className: 'wie-card-list' });
         renderCards(cardList);
         listPane.append(cardList);
-        // fixed 定位的工作台里，滚动位置只能靠显式恢复。
-        const restoreScroll = view.listScrollTop;
-        if (restoreScroll > 0)
-            requestAnimationFrame(() => { cardList.scrollTop = restoreScroll; });
 
         // 右侧详情区
         const detailPane = h('main', { className: 'wie-detail-pane' });
@@ -482,6 +440,10 @@ export function mountWorldInfoEditorPage(target, props) {
         }
 
         target.append(root);
+        // 挂载后立即恢复，避免下一帧前的连续重绘把新列表的初始 0 记回状态。
+        cardList.scrollTop = view.listScrollTop;
+        const zenList = target.querySelector('.wie-zen-entry-list');
+        if (zenList) zenList.scrollTop = view.zenListScrollTop;
         // 窄容器顶部栏的保存状态与详情头部同源，首次渲染后同步一次。
         syncMobileSaveChip();
     }

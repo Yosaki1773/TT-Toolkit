@@ -1,9 +1,12 @@
 import { actionButton, h } from '../../ui/dom.js';
 import { confirmDanger } from '../../ui/confirm.js';
 import { renderMacroBar } from './macro-bar.js';
+import { renderSearchAndFilter } from './search-filter.js';
 
 // 详情头部、窄容器保存条镜像与全屏写作浮层。
-export function createDetailView({ runtime, view, target, render, runNavigating, saveManually }) {
+export function createDetailView({ runtime, view, target, render, runNavigating, saveManually, onListChange }) {
+    let sidebarWorldData = null;
+    let sidebarFilter = null;
     function statusLabel(state) {
         if (state.saveStatus === 'unsaved')
             return { text: '未保存修改', className: 'unsaved' };
@@ -92,11 +95,59 @@ export function createDetailView({ runtime, view, target, render, runNavigating,
         );
     }
 
+    function refreshZenSidebar(list = target.querySelector('.wie-zen-entry-list')) {
+        if (!list) return;
+        const scrollTop = list.scrollTop;
+        const entries = runtime.getFilteredEntries();
+        list.replaceChildren(...(entries.length ? entries.map(entry => {
+            const selected = runtime.state.selectedUid === entry.uid;
+            const row = h('button', {
+                type: 'button', disabled: entry.broken,
+                className: `wie-zen-entry${selected ? ' active' : ''}${entry.disable ? ' disabled' : ''}`,
+                dataset: { uid: String(entry.uid) },
+                attrs: { 'aria-current': String(selected), title: entry.comment || '(未命名条目)' },
+            },
+                h('span', { className: 'wie-zen-entry-title', text: entry.comment || '(未命名条目)' }),
+                h('span', { className: 'wie-zen-entry-status', text: entry.broken ? '不可编辑' : entry.disable ? '已禁用' : '已启用' }),
+            );
+            row.addEventListener('click', () => {
+                void runNavigating(async () => {
+                    await runtime.selectEntry(entry.uid);
+                    view.mobileSubView = 'edit';
+                    view.zenSidebarOpen = false;
+                });
+            });
+            return row;
+        }) : [h('div', { className: 'wie-empty-hint', text: '未找到匹配的条目。' })]));
+        list.scrollTop = scrollTop;
+        sidebarWorldData = runtime.state.worldData;
+        sidebarFilter = runtime.state.filter;
+    }
+
+    function syncZenStatus() {
+        const overlay = target.querySelector('.wie-zen-overlay');
+        if (!overlay) return;
+        const { currentDraft, error } = runtime.state;
+        const title = overlay.querySelector('.wie-zen-title');
+        if (title && currentDraft) title.textContent = `全屏写作: #${currentDraft.uid} ${currentDraft.comment || ''}`;
+        const status = overlay.querySelector('.wie-zen-status');
+        const label = statusLabel(runtime.state);
+        status.textContent = label.text;
+        status.className = `wie-zen-status ${label.className}`;
+        const warning = overlay.querySelector('.wie-zen-error');
+        warning.hidden = !error;
+        warning.textContent = error ?? '';
+        if (sidebarWorldData !== runtime.state.worldData || sidebarFilter !== runtime.state.filter)
+            refreshZenSidebar();
+    }
+
     function renderZenOverlay(draft, scheduleScroll) {
+        const overlay = h('div', { className: `wie-zen-overlay${view.zenSidebarOpen ? ' wie-zen-directory-open' : ''}` });
         const textarea = h('textarea', {
             className: 'wie-zen-textarea',
             value: draft.content,
             placeholder: '在此沉浸输入设定正文...',
+            attrs: { 'aria-label': '全屏条目正文内容' },
         });
         textarea.addEventListener('input', () => {
             runtime.updateDraftField('content', textarea.value);
@@ -106,25 +157,44 @@ export function createDetailView({ runtime, view, target, render, runNavigating,
             scheduleScroll(textarea);
         });
 
+        const directoryToggle = actionButton('目录', () => {
+            view.zenSidebarOpen = !view.zenSidebarOpen;
+            overlay.classList.toggle('wie-zen-directory-open', view.zenSidebarOpen);
+            directoryToggle.setAttribute('aria-expanded', String(view.zenSidebarOpen));
+        }, { className: 'secondary wie-zen-directory-toggle' });
+        directoryToggle.setAttribute('aria-expanded', String(Boolean(view.zenSidebarOpen)));
+        const label = statusLabel(runtime.state);
         const header = h('div', { className: 'wie-zen-header' },
             actionButton('✕ 关闭', () => {
                 view.zenMode = false;
                 render();
             }, { className: 'secondary' }),
-            h('span', { style: 'font-size: 13px; font-weight: 600;', text: `全屏写作: #${draft.uid} ${draft.comment || ''}` }),
+            directoryToggle,
+            h('div', { className: 'wie-zen-heading' },
+                h('span', { className: 'wie-zen-title', text: `全屏写作: #${draft.uid} ${draft.comment || ''}` }),
+                h('span', { className: `wie-zen-status ${label.className}`, text: label.text, attrs: { role: 'status' } }),
+            ),
             actionButton('完成', () => {
                 view.zenMode = false;
                 render();
             }, { className: 'primary' }),
         );
-
-        // 宏栏放在输入区上方：软键盘从底部弹起，顶部栏始终可见可点。
-        return h('div', { className: 'wie-zen-overlay' },
-            header,
-            renderMacroBar(textarea),
-            textarea,
+        const list = h('div', { className: 'wie-zen-entry-list' });
+        refreshZenSidebar(list);
+        const sidebar = h('aside', { className: 'wie-zen-sidebar', attrs: { 'aria-label': '全屏世界书条目目录' } },
+            h('strong', { className: 'wie-zen-directory-label', text: '条目目录' }),
+            renderSearchAndFilter(runtime, onListChange),
+            list,
         );
+        const warning = h('div', { className: 'wie-zen-error wie-error-bar', text: runtime.state.error ?? '', attrs: { role: 'alert' } });
+        warning.hidden = !runtime.state.error;
+        // 宏栏放在右侧正文上方：目录与文本区独立滚动，不挤占软键盘余量。
+        overlay.append(header, warning, h('div', { className: 'wie-zen-body' },
+            sidebar,
+            h('div', { className: 'wie-zen-editor' }, renderMacroBar(textarea), textarea),
+        ));
+        return overlay;
     }
 
-    return { renderDetailHeader, renderZenOverlay, syncMobileSaveChip };
+    return { renderDetailHeader, renderZenOverlay, syncMobileSaveChip, refreshZenSidebar, syncZenStatus };
 }

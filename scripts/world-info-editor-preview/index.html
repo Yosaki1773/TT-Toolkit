@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>TT-Toolkit 隔离界面验证</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/scripts/extensions/third-party/TT-Toolkit/style.css">
+    <style>
+        body { margin: 24px; background: var(--ttk-bg, #111827); color: var(--ttk-text, #e5e7eb); font: 16px/1.6 sans-serif; }
+        button { padding: 10px 16px; font: inherit; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>世界书隔离界面验证</h1>
+    <p>使用原版工作台、iframe 和功能代码。80 条示例世界书只驻内存，不连接 TauriTavern，不修改真实数据。</p>
+    <p>测试：滚到列表后部并切换条目；拖拽正文框右下角改变高度，再展开高级设置或切换条目。</p>
+    <p>刷新整个页面可重置全部示例与界面状态。页面内的“刷新”按钮只重读当前内存世界书。</p>
+    <button id="open-preview" type="button" disabled>打开隔离工作台</button>
+    <p id="preview-status" role="status">正在加载…</p>
+    <script type="module" src="/app.js"></script>
+</body>
+</html>

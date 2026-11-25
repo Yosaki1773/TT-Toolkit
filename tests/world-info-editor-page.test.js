@@ -313,6 +313,45 @@ describe('WorldInfoEditorPage', () => {
         unmount();
     });
 
+    it.each([false, true])('preserves list scroll through consecutive renders when switching entries (dirty: %s)', async dirty => {
+        const target = document.body.appendChild(document.createElement('div'));
+        const host = createMockHost();
+        for (let uid = 3; uid <= 40; uid++) {
+            host._store.MyLore.entries[uid] = {
+                ...structuredClone(host._store.MyLore.entries[1]), uid, comment: `条目 ${uid}`, order: 100 + uid,
+            };
+        }
+        const runtime = new WorldInfoEditorRuntime(host);
+        const frames = [];
+        // 暂不执行动画帧：一次点击的订阅通知和操作收尾都会在下一帧前重绘。
+        const raf = vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(callback => frames.push(callback));
+        const unmount = mountWorldInfoEditorPage(target, { runtime, enabled: true, setEnabled: vi.fn() });
+        try {
+            await vi.waitFor(() => expect(target.querySelectorAll('.wie-card')).toHaveLength(40));
+            if (dirty) runtime.updateDraftField('comment', '切换前的草稿');
+            target.querySelector('.wie-card-list').scrollTop = 1800;
+            target.querySelector('.wie-card[data-uid="35"]').click();
+            await vi.waitFor(() => {
+                expect(runtime.state.selectedUid).toBe(35);
+                expect(target.querySelector('.wie-edit-view')).not.toBeNull();
+            });
+            frames.splice(0).forEach(callback => callback(0));
+            expect(target.querySelector('.wie-card-list').scrollTop).toBe(1800);
+            expect(target.querySelector('input[aria-label="标题 / 注释"]').value).toBe('条目 35');
+            expect(host.saveWorldInfo).toHaveBeenCalledTimes(dirty ? 1 : 0);
+
+            // 后续通知也不能覆盖用户新滚到的位置，包括主动回到顶部。
+            for (const scrollTop of [1200, 0]) {
+                target.querySelector('.wie-card-list').scrollTop = scrollTop;
+                runtime.notify();
+                runtime.notify();
+                frames.splice(0).forEach(callback => callback(0));
+                expect(target.querySelector('.wie-card-list').scrollTop).toBe(scrollTop);
+            }
+        }
+        finally { unmount(); raf.mockRestore(); target.remove(); }
+    });
+
     it('renders the user-macro save option in the top bar and persists toggles', async () => {        const target = document.createElement('div');
         const host = createMockHost();
         const runtime = new WorldInfoEditorRuntime(host);
