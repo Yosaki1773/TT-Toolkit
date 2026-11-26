@@ -228,6 +228,20 @@
   font-weight: 600;
 }
 
+.wie-list-sort {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ttk-muted);
+  font-size: 12px;
+}
+.wie-sort-select {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  cursor: pointer;
+}
+
 /* 卡片滚动列表 */
 .wie-card-list {
   flex: 1;

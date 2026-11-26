@@ -365,7 +365,7 @@ export function mountWorldInfoEditorPage(target, props) {
         if (previousList)
             view.listScrollTop = previousList.scrollTop;
         const previousZenList = target.querySelector('.wie-zen-entry-list');
-        if (previousZenList)
+        if (previousZenList && target.ownerDocument.defaultView.getComputedStyle(previousZenList.parentElement).display !== 'none')
             view.zenListScrollTop = previousZenList.scrollTop;
 
         target.replaceChildren();

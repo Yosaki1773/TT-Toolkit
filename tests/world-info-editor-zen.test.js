@@ -89,6 +89,61 @@ describe('fullscreen world info directory', () => {
         expect(target.querySelectorAll('.wie-card')).toHaveLength(1);
     });
 
+    it('sorts both sidebars by descending estimated tokens without writing entry order, and restores the default order', async () => {
+        const { target, zen, runtime, host, store } = await openEditor();
+        store.entries[1].content = '短';
+        store.entries[2].content = '长正文'.repeat(100);
+        store.entries[3].content = '中正文'.repeat(30);
+        await runtime.refreshWorlds();
+        const textarea = zen().querySelector('.wie-zen-textarea');
+        textarea.setSelectionRange(0, 1);
+        const sort = zen().querySelector('.wie-sort-select');
+        expect(sort).not.toBeNull();
+        sort.focus();
+        sort.value = 'tokens';
+        sort.dispatchEvent(new Event('change'));
+        expect(runtime.state.sort).toBe('tokens');
+        expect([...zen().querySelectorAll('.wie-zen-entry')].map(item => item.dataset.uid)).toEqual(['2', '3', '1']);
+        expect([...target.querySelectorAll('.wie-card')].map(item => item.dataset.uid)).toEqual(['2', '3', '1']);
+        expect(runtime.state.selectedUid).toBe(1);
+        expect(zen().querySelector('.wie-zen-textarea')).toBe(textarea);
+        expect([textarea.selectionStart, textarea.selectionEnd]).toEqual([0, 1]);
+        expect(host.saveWorldInfo).not.toHaveBeenCalled();
+        expect(Object.values(runtime.state.worldData.entries).map(entry => entry.order)).toEqual([100, 100, 100]);
+
+        chip(zen(), '已启用').click();
+        expect([...zen().querySelectorAll('.wie-zen-entry')].map(item => item.dataset.uid)).toEqual(['3', '1']);
+        const search = zen().querySelector('.wie-search-box input');
+        search.value = '圣殿';
+        search.dispatchEvent(new Event('input'));
+        expect(zen().querySelectorAll('.wie-zen-entry')).toHaveLength(1);
+        [...zen().querySelectorAll('.wie-zen-header button')].find(button => button.textContent === '完成').click();
+        expect(target.querySelector('.wie-list-pane .wie-sort-select').value).toBe('tokens');
+        target.querySelector('.wie-list-pane .wie-search-clear').click();
+        [...target.querySelectorAll('.wie-list-pane .wie-chip')].find(button => button.textContent === '全部').click();
+        const managementSort = target.querySelector('.wie-list-pane .wie-sort-select');
+        managementSort.focus();
+        managementSort.value = 'order';
+        managementSort.dispatchEvent(new Event('change'));
+        expect([...target.querySelectorAll('.wie-card')].map(item => item.dataset.uid)).toEqual(['1', '2', '3']);
+        expect(host.saveWorldInfo).not.toHaveBeenCalled();
+    });
+
+    it('updates token sorting from runtime notifications without replacing a focused fullscreen editor', async () => {
+        const { zen, runtime, store } = await openEditor();
+        store.entries[3].content = '最长正文'.repeat(40);
+        await runtime.refreshWorlds();
+        const textarea = zen().querySelector('.wie-zen-textarea');
+        textarea.focus();
+        textarea.setSelectionRange(1, 3);
+        runtime.setSort('tokens');
+        expect(zen().querySelector('.wie-sort-select').value).toBe('tokens');
+        expect(zen().querySelector('.wie-zen-entry').dataset.uid).toBe('3');
+        expect(zen().querySelector('.wie-zen-textarea')).toBe(textarea);
+        expect(document.activeElement).toBe(textarea);
+        expect([textarea.selectionStart, textarea.selectionEnd]).toEqual([1, 3]);
+    });
+
     it('saves the edited body before selecting another directory entry', async () => {
         const { zen, host, store } = await openEditor();
         const textarea = zen().querySelector('.wie-zen-textarea');
@@ -128,6 +183,73 @@ describe('fullscreen world info directory', () => {
         expect(zen().querySelector('.wie-zen-entry-list').scrollTop).toBe(1200);
         runtime.notify();
         expect(zen().querySelector('.wie-zen-entry-list').scrollTop).toBe(1200);
+    });
+
+    it('reveals the current late entry when opening the mobile directory, without moving the editor or focus', async () => {
+        const { zen, runtime } = await openEditor(40);
+        await runtime.selectEntry(35);
+        const list = zen().querySelector('.wie-zen-entry-list');
+        const selected = row(zen(), 35);
+        const textarea = zen().querySelector('.wie-zen-textarea');
+        textarea.scrollTop = 70;
+        textarea.setSelectionRange(0, 0);
+        // happy-dom 不计算布局，模拟 300px 的目录视口与第 35 行的实际位置。
+        vi.spyOn(list, 'getBoundingClientRect').mockImplementation(() => ({ top: 100, bottom: 400 }));
+        vi.spyOn(selected, 'getBoundingClientRect').mockImplementation(() => ({
+            top: 1732 - list.scrollTop, bottom: 1776 - list.scrollTop,
+        }));
+        const toggle = zen().querySelector('.wie-zen-directory-toggle');
+        toggle.focus();
+        toggle.click();
+        expect(list.scrollTop).toBe(1376);
+        expect(selected.getBoundingClientRect().bottom).toBe(400);
+        expect(document.activeElement).toBe(toggle);
+        expect(textarea.scrollTop).toBe(70);
+        expect(zen().querySelector('.wie-zen-textarea')).toBe(textarea);
+        // 上次位置位于当前条目下方时，也要向上带回当前行。
+        list.scrollTop = 2000;
+        toggle.click();
+        toggle.click();
+        expect(list.scrollTop).toBe(1632);
+        expect(selected.getBoundingClientRect().top).toBe(100);
+    });
+
+    it('does not overwrite remembered directory scroll with zero during hidden redraws', async () => {
+        const { target, zen, runtime } = await openEditor(40);
+        const style = document.createElement('style');
+        style.textContent = '.wie-zen-sidebar { display: none; } .wie-zen-directory-open .wie-zen-sidebar { display: flex; }';
+        document.head.append(style);
+        cleanups.push(() => style.remove());
+        zen().querySelector('.wie-zen-directory-toggle').click();
+        zen().querySelector('.wie-zen-entry-list').scrollTop = 1200;
+        row(zen(), 35).click();
+        await vi.waitFor(() => expect(runtime.state.selectedUid).toBe(35));
+        expect(zen().querySelector('.wie-zen-directory-toggle').getAttribute('aria-expanded')).toBe('false');
+        // 浏览器会把 display:none 下恢复的 scrollTop 钳制为 0；再触发一次页面重绘。
+        zen().querySelector('.wie-zen-entry-list').scrollTop = 0;
+        target.querySelector('.wie-accordion-btn').click();
+        zen().querySelector('.wie-zen-directory-toggle').click();
+        expect(zen().querySelector('.wie-zen-entry-list').scrollTop).toBe(1200);
+    });
+
+    it('keeps the remembered scroll if the active entry is already visible or filtered out', async () => {
+        const { zen } = await openEditor(40);
+        const list = zen().querySelector('.wie-zen-entry-list');
+        vi.spyOn(list, 'getBoundingClientRect').mockReturnValue({ top: 100, bottom: 400 });
+        vi.spyOn(row(zen(), 1), 'getBoundingClientRect').mockReturnValue({ top: 150, bottom: 194 });
+        zen().querySelector('.wie-zen-directory-toggle').click();
+        list.scrollTop = 180;
+        zen().querySelector('.wie-zen-directory-toggle').click();
+        list.scrollTop = 0;
+        zen().querySelector('.wie-zen-directory-toggle').click();
+        expect(list.scrollTop).toBe(180);
+        const search = zen().querySelector('.wie-search-box input');
+        search.value = '不存在的条目';
+        search.dispatchEvent(new Event('input'));
+        expect(list.querySelector('.active')).toBeNull();
+        zen().querySelector('.wie-zen-directory-toggle').click();
+        expect(() => zen().querySelector('.wie-zen-directory-toggle').click()).not.toThrow();
+        expect(search.value).toBe('不存在的条目');
     });
 
     it('updates visible fullscreen save feedback without interrupting text input', async () => {

@@ -308,7 +308,7 @@ html[data-ttk-surface] .master-toggle input[type=checkbox]:checked::before { tra
  * 无障碍与观感基线（仅工作台文档，避免影响宿主）
  * ============================================================ */
 html[data-ttk-surface] { scrollbar-width: thin; scrollbar-color: var(--ttk-border-strong) transparent; }
-html[data-ttk-surface] ::selection { background: var(--ttk-accent-soft); }
+html[data-ttk-surface] ::selection { background: var(--ttk-selection-bg); color: var(--ttk-selection-text); text-shadow: none; }
 html[data-ttk-surface] * { -webkit-tap-highlight-color: transparent; }
 
 html[data-ttk-surface] button { font: inherit; line-height: 1.4; transition: background-color var(--ttk-duration) var(--ttk-ease), border-color var(--ttk-duration) var(--ttk-ease), color var(--ttk-duration) var(--ttk-ease), box-shadow var(--ttk-duration) var(--ttk-ease); }

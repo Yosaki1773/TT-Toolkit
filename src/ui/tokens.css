@@ -214,6 +214,11 @@
   /* 次要文字：alpha 取 70%，使浅色主题下也能达到 AA 4.5:1（62% 时最差仅 4.0:1）。 */
   --ttk-muted: color-mix(in srgb, var(--ttk-text) 70%, transparent);
 
+  /* 文字选区反转正文/画布配对色，避免透明强调色与原背景相近。
+     跟随宿主时仍使用宿主实际文字和底色，不依赖强调色的明暗。 */
+  --ttk-selection-bg: var(--ttk-text);
+  --ttk-selection-text: var(--ttk-bg);
+
   --ttk-border: color-mix(in srgb, var(--ttk-text) 14%, transparent);
   --ttk-border-strong: color-mix(in srgb, var(--ttk-text) 26%, transparent);
 

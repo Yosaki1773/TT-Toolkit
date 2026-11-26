@@ -1,6 +1,6 @@
 import { actionButton, h } from '../../ui/dom.js';
 
-// 管理列表与全屏目录共用搜索、筛选语义；只更新列表，不替换正在输入的控件。
+// 管理列表与全屏目录共用搜索、筛选和排序；只更新列表，不替换正在输入的控件。
 export function renderSearchAndFilter(runtime, onChange) {
     const state = runtime.state;
     const searchInput = h('input', {
@@ -39,10 +39,22 @@ export function renderSearchAndFilter(runtime, onChange) {
         button.dataset.filter = key;
         return button;
     });
+    const sortSelect = h('select', {
+        className: 'wie-sort-select',
+        attrs: { 'aria-label': '世界书条目排序', title: '仅调整列表显示顺序，不修改条目的 Order 值。' },
+    });
+    for (const [value, label] of [['order', '默认顺序'], ['tokens', '预估 Token 从多到少']]) {
+        sortSelect.append(h('option', { value, text: label, selected: state.sort === value }));
+    }
+    sortSelect.addEventListener('change', () => {
+        runtime.setSort(sortSelect.value);
+        update();
+    });
     return h('div', { className: 'wie-list-header' },
         h('div', { className: 'wie-search-box' },
             searchInput, clearBtn,
         ),
         h('div', { className: 'wie-filter-chips' }, chips),
+        h('label', { className: 'wie-list-sort' }, h('span', { text: '排序' }), sortSelect),
     );
 }

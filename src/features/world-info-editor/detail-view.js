@@ -7,6 +7,7 @@ import { renderSearchAndFilter } from './search-filter.js';
 export function createDetailView({ runtime, view, target, render, runNavigating, saveManually, onListChange }) {
     let sidebarWorldData = null;
     let sidebarFilter = null;
+    let sidebarSort = null;
     function statusLabel(state) {
         if (state.saveStatus === 'unsaved')
             return { text: '未保存修改', className: 'unsaved' };
@@ -122,6 +123,7 @@ export function createDetailView({ runtime, view, target, render, runNavigating,
         list.scrollTop = scrollTop;
         sidebarWorldData = runtime.state.worldData;
         sidebarFilter = runtime.state.filter;
+        sidebarSort = runtime.state.sort;
     }
 
     function syncZenStatus() {
@@ -137,7 +139,9 @@ export function createDetailView({ runtime, view, target, render, runNavigating,
         const warning = overlay.querySelector('.wie-zen-error');
         warning.hidden = !error;
         warning.textContent = error ?? '';
-        if (sidebarWorldData !== runtime.state.worldData || sidebarFilter !== runtime.state.filter)
+        const sort = overlay.querySelector('.wie-sort-select');
+        sort.value = runtime.state.sort;
+        if (sidebarWorldData !== runtime.state.worldData || sidebarFilter !== runtime.state.filter || sidebarSort !== runtime.state.sort)
             refreshZenSidebar();
     }
 
@@ -158,9 +162,22 @@ export function createDetailView({ runtime, view, target, render, runNavigating,
         });
 
         const directoryToggle = actionButton('目录', () => {
+            // display:none 下的滚动位置不可恢复：收起前记住，展开后再应用。
+            if (view.zenSidebarOpen) view.zenListScrollTop = list.scrollTop;
             view.zenSidebarOpen = !view.zenSidebarOpen;
             overlay.classList.toggle('wie-zen-directory-open', view.zenSidebarOpen);
             directoryToggle.setAttribute('aria-expanded', String(view.zenSidebarOpen));
+            if (view.zenSidebarOpen) {
+                list.scrollTop = view.zenListScrollTop;
+                const selected = list.querySelector('.wie-zen-entry.active');
+                if (selected) {
+                    const bounds = list.getBoundingClientRect();
+                    const rect = selected.getBoundingClientRect();
+                    if (rect.top < bounds.top) list.scrollTop += rect.top - bounds.top;
+                    else if (rect.bottom > bounds.bottom) list.scrollTop += rect.bottom - bounds.bottom;
+                }
+                view.zenListScrollTop = list.scrollTop;
+            }
         }, { className: 'secondary wie-zen-directory-toggle' });
         directoryToggle.setAttribute('aria-expanded', String(Boolean(view.zenSidebarOpen)));
         const label = statusLabel(runtime.state);

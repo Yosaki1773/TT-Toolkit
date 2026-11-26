@@ -6,6 +6,7 @@ import { createThemeBridge } from '../src/ui/theme-bridge.js';
 import { ToolkitError } from '../src/kernel/errors.js';
 
 const tokensCss = readFileSync('src/ui/tokens.css', 'utf8');
+const sharedCss = readFileSync('src/style.css', 'utf8');
 
 afterEach(() => {
     document.documentElement.removeAttribute('data-ttk-theme');
@@ -64,6 +65,34 @@ describe('theme palette readability', () => {
             }
         }
         expect(failures).toEqual([]);
+    });
+});
+
+describe('text selection readability', () => {
+    it('sets both selection colors inside the workbench without leaking into the host', () => {
+        const rules = [...sharedCss.matchAll(/([^{}]+)::selection\s*\{([^{}]*)\}/g)];
+        expect(rules).toHaveLength(1);
+        expect(rules[0][1].trim()).toBe('html[data-ttk-surface]');
+        expect(rules[0][2]).toMatch(/background:\s*var\(--ttk-selection-bg\)/);
+        expect(rules[0][2]).toMatch(/color:\s*var\(--ttk-selection-text\)/);
+        expect(rules[0][2]).toMatch(/text-shadow:\s*none/);
+    });
+
+    it('keeps selected text readable and selection distinct from every built-in surface', () => {
+        const backgroundToken = /--ttk-selection-bg:\s*var\((--ttk-[\w-]+)\)/.exec(tokensCss)?.[1];
+        const foregroundToken = /--ttk-selection-text:\s*var\((--ttk-[\w-]+)\)/.exec(tokensCss)?.[1];
+        // 选区取正文/画布配对色，不继承元素颜色，也不使用透明的强调色软背景。
+        expect(backgroundToken).toBe('--ttk-text');
+        expect(foregroundToken).toBe('--ttk-bg');
+        for (const theme of THEMES.filter(theme => theme.id !== HOST_THEME_ID)) {
+            const palette = paletteOf(theme.id);
+            const background = palette[backgroundToken];
+            const foreground = palette[foregroundToken];
+            expect(contrast(foreground, background), `${theme.id} 选中文字`).toBeGreaterThanOrEqual(4.5);
+            for (const surface of ['--ttk-bg', '--ttk-panel', '--ttk-card', '--ttk-inset']) {
+                expect(contrast(background, palette[surface]), `${theme.id} 选区/${surface}`).toBeGreaterThanOrEqual(3);
+            }
+        }
     });
 });
 
